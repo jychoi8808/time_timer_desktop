@@ -74,7 +74,7 @@ class Theme:
             self.number_col        = QColor(160, 160, 168)
 
             # 중앙 텍스트 / 핸드
-            self.time_col          = QColor(0x20, 0x21, 0x23)   # 요청: 라이트/다크 공통 #202123
+            self.time_col          = QColor(0xD0, 0xD0, 0xD8)   # Figma 다크: #D0D0D8
             self.status_col        = QColor(110, 110, 120)
             self.hand_dot          = QColor(65, 65, 72)
 
@@ -609,7 +609,8 @@ class TimerDial(QWidget):
 
     def _in_dial(self, pos):
         cx, cy = self.width()/2, self.height()/2
-        r = min(self.width(), self.height())/2 * 0.88
+        # Figma: face_r=142.8, total_r=170 → 비율 0.839
+        r = min(self.width(), self.height()) / 2 * 0.839
         return (pos.x()-cx)**2 + (pos.y()-cy)**2 <= r*r
 
     def mousePressEvent(self, e):
@@ -639,139 +640,154 @@ class TimerDial(QWidget):
         self.update()
         if self._pw: self._pw.on_state_changed()
 
-    # 렌더링 ───────────────────────────────────────────────────────────
+    # 렌더링 ── Figma Make 수치 기반 ────────────────────────────────────
     def paintEvent(self, _):
         t = self.theme
         p = QPainter(self); p.setRenderHint(QPainter.Antialiasing)
 
         W, H = self.width(), self.height()
         side = min(W, H)
+        scale = side / 340.0      # Figma 기준 340px → 실제 크기 스케일
         cx, cy = W/2, H/2
 
-        # ── 구역 반지름 정의 (레퍼런스 이미지 기반) ──
-        outer_r   = side * 0.490   # 눈금/숫자 바깥 원
-        ring_r    = side * 0.420   # 링(얇은 원) 반지름
-        ring_w    = max(1.5, side * 0.008)   # 링 두께
-        face_r    = ring_r - ring_w/2 - 1    # 내부 파이 영역 반지름
-        tick_out  = outer_r
-        tick_in_l = ring_r + max(2, side*0.030)  # 긴 눈금 안쪽 끝
-        tick_in_s = ring_r + max(1, side*0.014)  # 짧은 눈금 안쪽 끝
-        num_r     = outer_r - side * 0.048         # 숫자 중심 반지름
+        # ── Figma SVG 수치 → 스케일 적용
+        # Figma: viewBox 340x340, cx=170
+        # face_r  = 142.8  → 링 내부 파이 영역 (clipPath 원)
+        # ring_r  = 142.8  → 링 테두리 (stroke만, fill none)
+        # num_r   = 182    → 숫자 라벨 중심 (링 바깥)
+        # tick_out= 170    → 눈금 바깥 끝 (다이얼 가장자리)
+        # center_r= 51     → 중앙 흰 원 반지름
+        # center_dot_r = 3 → 중앙 점
 
-        tlw = max(1.5, side*0.006)   # 긴 눈금 폭
-        tsw = max(1.0, side*0.003)   # 짧은 눈금 폭
+        face_r    = 142.8 * scale
+        ring_r    = 142.8 * scale
+        ring_w    = max(1.0, 1.5 * scale)
+        tick_outer= 170.0 * scale      # 눈금 바깥 끝 (다이얼 edge)
+        tick_il   = (170.0 - 9.0) * scale   # 긴 눈금 안쪽 끝 (9px 길이)
+        tick_is   = (170.0 - 5.0) * scale   # 짧은 눈금 안쪽 끝 (5px 길이)
+        tick_lw   = max(1.0, 1.5 * scale)   # 긴 눈금 폭
+        tick_sw   = max(0.5, 1.0 * scale)   # 짧은 눈금 폭
+        num_r     = 182.0 * scale      # 숫자 중심 반지름 (링 바깥)
+        center_r  = 51.0 * scale       # 중앙 원 반지름
+        dot_r     = max(2.0, 3.0 * scale)   # 중앙 점
 
-        nfx  = max(9, int(side * 0.042))   # 숫자 폰트
-        cfx  = max(14, int(side * 0.092))  # 시간 폰트 (원래 * 0.108 → 85%)
-        cbr  = side * 0.148                # 중앙 원 반지름
+        nfx = max(9,  int(14 * scale))   # 숫자 라벨 폰트 (Figma: 14px)
+        cfx = max(14, int(34 * scale))   # 시간 표시 폰트 (Figma: 34px)
+        sfx = max(7,  int(11 * scale))   # 상태 힌트 폰트 (Figma: 11px)
 
-        # ── 내부 페이스 배경 ──
+        # ── Layer 0: 다이얼 페이스 배경 (full circle) ──
         p.setPen(Qt.NoPen)
         p.setBrush(QBrush(t.dial_face))
-        p.drawEllipse(QPointF(cx,cy), face_r, face_r)
+        p.drawEllipse(QPointF(cx, cy), tick_outer, tick_outer)
 
-        # ── 호버 미리보기 ──
+        # ── Layer 1: 호버 미리보기 (파이, face_r 기준) ──
         if self.hover_angle is not None and not self.is_running and not self.is_dragging:
+            p.setPen(Qt.NoPen)
             p.setBrush(QBrush(Theme.RED_LIGHT))
             rect = QRectF(cx-face_r, cy-face_r, face_r*2, face_r*2)
             p.drawPie(rect, int(90*16), int(-self.hover_angle*16))
 
-        # ── 빨간 파이 섹터 ──
+        # ── Layer 2: 빨간 파이 섹터 ──
         if self._disp > 0:
             frac = self._disp / (self.max_minutes * 60)
             span = frac * 360.0
+            p.setPen(Qt.NoPen)
             p.setBrush(QBrush(Theme.RED))
             rect = QRectF(cx-face_r, cy-face_r, face_r*2, face_r*2)
             p.drawPie(rect, int(90*16), int(-span*16))
 
-        # ── 링 ──
+        # ── Layer 3: 링 테두리 (stroke only) ──
         p.setPen(QPen(t.dial_ring, ring_w))
         p.setBrush(Qt.NoBrush)
-        p.drawEllipse(QPointF(cx,cy), ring_r, ring_r)
+        p.drawEllipse(QPointF(cx, cy), ring_r, ring_r)
 
-        # ── 눈금 (링 바깥쪽) ──
-        num_ticks = self.max_minutes
+        # ── Layer 4: 눈금 (링 바깥 → 다이얼 가장자리 방향) ──
+        num_ticks = self.max_minutes   # 60 or 120
         p.save(); p.translate(cx, cy)
         for i in range(num_ticks):
-            ang = i * 360 / num_ticks
+            ang = i * 360.0 / num_ticks
             p.save(); p.rotate(ang)
             major = (i % 5 == 0)
-            p.setPen(QPen(t.tick_major if major else t.tick_minor,
-                          tlw if major else tsw, Qt.SolidLine, Qt.RoundCap))
-            y_out = -tick_out
-            y_in  = -(tick_in_l if major else tick_in_s)
-            p.drawLine(QPointF(0, y_in), QPointF(0, y_out))
+            p.setPen(QPen(
+                t.tick_major if major else t.tick_minor,
+                tick_lw if major else tick_sw,
+                Qt.SolidLine, Qt.RoundCap
+            ))
+            # 눈금: 안쪽(ring 바로 밖) → 바깥쪽(dial edge)
+            p.drawLine(QPointF(0, -(tick_il if major else tick_is)),
+                       QPointF(0, -tick_outer))
             p.restore()
         p.restore()
 
-        # ── 숫자 ──
-        step = self.max_minutes // 12
+        # ── Layer 5: 숫자 라벨 (링 바깥, num_r=182 기준) ──
+        step = self.max_minutes // 12   # 5 or 10
         p.save()
         p.setFont(get_font(nfx, QFont.DemiBold))
         p.setPen(t.number_col)
         for i in range(12):
             minute = i * step
-            rad = math.radians(i*30 - 90)
+            rad = math.radians(i * 30 - 90)
             lx = cx + num_r * math.cos(rad)
             ly = cy + num_r * math.sin(rad)
             text = str(minute)
             fm = p.fontMetrics()
-            tw = fm.horizontalAdvance(text); th = fm.height()
-            p.drawText(int(lx-tw/2), int(ly+th/3), text)
+            tw = fm.horizontalAdvance(text)
+            th = fm.height()
+            p.drawText(int(lx - tw/2), int(ly + th/3), text)
         p.restore()
 
-        # ── 핸드 (끝 각도에서 중심으로 뻗는 얇은 선) ──
+        # ── Layer 6: 핸드 라인 (중심 → 파이 끝 각도) ──
         if self._disp > 0:
             frac = self._disp / (self.max_minutes * 60)
-            hand_angle = math.radians(frac * 360 - 90)
-            hx = cx + face_r * math.cos(hand_angle)
-            hy = cy + face_r * math.sin(hand_angle)
-            hand_pen = QPen(Theme.RED_HAND, max(1.5, side*0.005),
-                            Qt.SolidLine, Qt.RoundCap)
-            p.setPen(hand_pen)
+            hand_rad = math.radians(frac * 360 - 90)
+            hx = cx + face_r * math.cos(hand_rad)
+            hy = cy + face_r * math.sin(hand_rad)
+            p.setPen(QPen(Theme.RED_HAND, max(1.5, 2.0*scale),
+                          Qt.SolidLine, Qt.RoundCap))
             p.drawLine(QPointF(cx, cy), QPointF(hx, hy))
 
-        # ── 중앙 원 (시간 텍스트 배경) ──
+        # ── Layer 7: 중앙 원 (fill=dial_face, stroke none) ──
         p.setPen(Qt.NoPen)
         p.setBrush(QBrush(t.dial_face))
-        p.drawEllipse(QPointF(cx,cy), cbr, cbr)
-        # 중앙 원 테두리
-        p.setPen(QPen(t.dial_ring, max(1, side*0.004)))
-        p.setBrush(Qt.NoBrush)
-        p.drawEllipse(QPointF(cx,cy), cbr, cbr)
+        p.drawEllipse(QPointF(cx, cy), center_r, center_r)
 
-        # ── 시간 텍스트 ──
+        # ── Layer 8: 시간 텍스트 + 상태 힌트 (중앙 원 안) ──
         p.save()
         shown = int(math.ceil(self._disp)) if self.is_running else self.remaining_seconds
         mins, secs = divmod(shown, 60)
-        # 드래그 중(설정 중)이면 분 단위이므로 항상 MM:00 표시
-        if self.is_dragging:
-            time_txt = f"{mins:02d}:00"
-        else:
-            time_txt = f"{mins:02d}:{secs:02d}"
+        time_txt = f"{mins:02d}:00" if self.is_dragging else f"{mins:02d}:{secs:02d}"
+
+        # 시간 (34px Bold)
         p.setFont(get_font(cfx, QFont.Bold))
         p.setPen(t.time_col)
         fm = p.fontMetrics()
-        tw = fm.horizontalAdvance(time_txt); th = fm.height()
-        p.drawText(int(cx-tw/2), int(cy+th/4), time_txt)
+        tw = fm.horizontalAdvance(time_txt)
+        th = fm.height()
+        # 상태 힌트가 있으므로 시간을 살짝 위로 올려 두 줄을 중앙 정렬
+        line_gap = max(2, int(4 * scale))
+        sfm_h = max(8, int(sfx * 1.2))   # 상태 텍스트 라인 높이 추정
+        total_h = th + line_gap + sfm_h
+        time_y = int(cy - total_h/2 + th * 0.82)
+        p.drawText(int(cx - tw/2), time_y, time_txt)
 
-        # 상태 힌트 (중앙 원 아래)
-        if self.is_running:      st, sc = "실행 중",      t.theme_status(True)
-        elif self.is_dragging:   st, sc = "설정 중...",   t.status_col
-        elif self.remaining_seconds > 0: st, sc = "준비", t.status_col
-        else:                    st, sc = "터치해서 설정", t.status_col
+        # 상태 힌트 (11px Regular)
+        if self.is_running:              st, sc = "실행 중",      t.theme_status(True)
+        elif self.is_dragging:           st, sc = "설정 중...",   t.status_col
+        elif self.remaining_seconds > 0: st, sc = "준비",         t.status_col
+        else:                            st, sc = "터치해서 설정", t.status_col
 
-        p.setFont(get_font(max(8, int(cfx*0.34))))
+        p.setFont(get_font(sfx))
         p.setPen(sc)
         fm2 = p.fontMetrics()
         tw2 = fm2.horizontalAdvance(st)
-        p.drawText(int(cx-tw2/2), int(cy+th*0.72), st)
+        status_y = time_y + line_gap + sfm_h
+        p.drawText(int(cx - tw2/2), status_y, st)
         p.restore()
 
-        # ── 중앙 점 ──
-        p.setPen(Qt.NoPen); p.setBrush(QBrush(t.hand_dot))
-        dr = max(3, side*0.012)
-        p.drawEllipse(QPointF(cx,cy), dr, dr)
+        # ── Layer 9: 중앙 점 ──
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(t.hand_dot))
+        p.drawEllipse(QPointF(cx, cy), dot_r, dot_r)
 
 
 # Theme에 helper 추가 (monkey-patch 대신 메서드로)
