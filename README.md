@@ -1,4 +1,4 @@
-# Time Timer (Desktop) v2
+# Time Timer (Desktop) v4
 
 Google의 Time Timer 제품에서 영감을 받은 반응형 데스크탑 타이머입니다.
 
@@ -49,21 +49,6 @@ pip install -r requirements.txt
 ```bash
 python time_timer.py
 ```
-
-## Windows exe로 빌드
-
-```bash
-pip install pyinstaller
-pyinstaller --noconsole --onefile --name "TimeTimer" time_timer.py
-```
-
-`dist/TimeTimer.exe`가 생성됩니다. 외부 리소스 파일이 없어서 이 exe 하나만 있으면 동작합니다.
-
-> **참고**: Windows에서 QSoundEffect가 동작하려면 PyQt5의 QtMultimedia 플러그인이 함께 번들링되어야 합니다. PyInstaller가 보통 자동으로 처리하지만, 소리가 안 난다면 빌드 명령에 `--collect-submodules PyQt5` 옵션을 추가해 보세요:
->
-> ```bash
-> pyinstaller --noconsole --onefile --collect-submodules PyQt5 --name "TimeTimer" time_timer.py
-> ```
 
 ## 사용 방법
 
