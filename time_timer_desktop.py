@@ -185,12 +185,23 @@ class Theme:
         QPushButton#iconBtn:hover {{ color:{btn_fg}; }}
         QPushButton#pinBtn {{
             background:transparent; border:none;
-            font-size:13px; padding:0 6px; color:{sub};
-            font-weight:500;
+            font-size:18px; padding:0;
+            opacity: 0.4;
         }}
         QPushButton#pinBtn:checked {{
-            color:{ACCENT};
+            opacity: 1.0;
         }}
+        QPushButton#pinBtn:hover {{
+            background: {btn_hv};
+            border-radius: 8px;
+        }}
+        QPushButton#emojiBtn {{
+            background:{btn_bg}; border:1px solid {btn_bd};
+            border-radius:26px; padding:0;
+            font-size:22px;
+        }}
+        QPushButton#emojiBtn:hover  {{ background:{btn_hv}; border-color:{btn_fg}; }}
+        QPushButton#emojiBtn:pressed {{ background:{btn_pr}; }}
         QPushButton#settingsBtn {{
             background:transparent; border:none;
             font-size:18px; padding:0; color:{sub};
@@ -235,6 +246,16 @@ class Theme:
         }}
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
             height:0;
+        }}
+        QSlider#opacitySlider::groove:horizontal {{
+            height:4px; background:{btn_bd}; border-radius:2px;
+        }}
+        QSlider#opacitySlider::handle:horizontal {{
+            width:16px; height:16px; margin:-6px 0;
+            background:{ACCENT}; border-radius:8px;
+        }}
+        QSlider#opacitySlider::sub-page:horizontal {{
+            background:{ACCENT}; border-radius:2px;
         }}
         """
 
@@ -647,40 +668,38 @@ class TimerDial(QWidget):
 
         W, H = self.width(), self.height()
         side = min(W, H)
-        scale = side / 340.0      # Figma 기준 340px → 실제 크기 스케일
         cx, cy = W/2, H/2
 
-        # ── Figma SVG 수치 → 스케일 적용
-        # Figma: viewBox 340x340, cx=170
-        # face_r  = 142.8  → 링 내부 파이 영역 (clipPath 원)
-        # ring_r  = 142.8  → 링 테두리 (stroke만, fill none)
-        # num_r   = 182    → 숫자 라벨 중심 (링 바깥)
-        # tick_out= 170    → 눈금 바깥 끝 (다이얼 가장자리)
-        # center_r= 51     → 중앙 흰 원 반지름
-        # center_dot_r = 3 → 중앙 점
+        # ── 수치 정의 ──────────────────────────────────────────────────
+        nfx       = max(8, int(side * 0.038))    # 숫자 라벨 폰트
+        cfx       = max(11, int(side * 0.082))   # 시간 표시 폰트
 
-        face_r    = 142.8 * scale
-        ring_r    = 142.8 * scale
-        ring_w    = max(1.0, 1.5 * scale)
-        tick_outer= 170.0 * scale      # 눈금 바깥 끝 (다이얼 edge)
-        tick_il   = (170.0 - 9.0) * scale   # 긴 눈금 안쪽 끝 (9px 길이)
-        tick_is   = (170.0 - 5.0) * scale   # 짧은 눈금 안쪽 끝 (5px 길이)
-        tick_lw   = max(1.0, 1.5 * scale)   # 긴 눈금 폭
-        tick_sw   = max(0.5, 1.0 * scale)   # 짧은 눈금 폭
-        num_r     = 182.0 * scale      # 숫자 중심 반지름 (링 바깥)
-        center_r  = 51.0 * scale       # 중앙 원 반지름
-        dot_r     = max(2.0, 3.0 * scale)   # 중앙 점
+        label_margin = nfx * 1.4               # 위젯 경계 ↔ 숫자 중심 여유
+        tick_gap     = nfx * 1.0               # 눈금 바깥 끝 ↔ 숫자 중심 여백 (신규)
+        num_gap      = nfx * 2.2               # 숫자 중심 ↔ 링 사이 여백
 
-        nfx = max(9,  int(14 * scale))   # 숫자 라벨 폰트 (Figma: 14px)
-        cfx = max(14, int(34 * scale))   # 시간 표시 폰트 (Figma: 34px)
-        sfx = max(7,  int(11 * scale))   # 상태 힌트 폰트 (Figma: 11px)
+        total_r   = side * 0.500 - label_margin # 숫자 라벨 중심 반지름
+        num_r     = total_r                      # 숫자 라벨 중심
+        face_r    = total_r - num_gap            # 파이/링 반지름
+        ring_r    = face_r
+        ring_w    = max(1.0, side * 0.004)
 
-        # ── Layer 0: 다이얼 페이스 배경 (full circle) ──
+        # 눈금: ring 바깥에서 시작 → 숫자와 tick_gap 만큼 떨어진 곳에서 끝
+        tick_outer = total_r - tick_gap          # 눈금 바깥 끝 (숫자와 gap 확보)
+        tick_long  = max(2, side * 0.022)
+        tick_short = max(1, side * 0.012)
+        tick_lw    = max(1.0, side * 0.004)
+        tick_sw    = max(0.5, side * 0.002)
+
+        # 중앙 원
+        center_r  = max(cfx * 1.4, side * 0.130)
+
+        # ── Layer 0: 다이얼 페이스 배경 (전체) ──
         p.setPen(Qt.NoPen)
         p.setBrush(QBrush(t.dial_face))
-        p.drawEllipse(QPointF(cx, cy), tick_outer, tick_outer)
+        p.drawEllipse(QPointF(cx, cy), side * 0.500, side * 0.500)
 
-        # ── Layer 1: 호버 미리보기 (파이, face_r 기준) ──
+        # ── Layer 1: 호버 미리보기 ──
         if self.hover_angle is not None and not self.is_running and not self.is_dragging:
             p.setPen(Qt.NoPen)
             p.setBrush(QBrush(Theme.RED_LIGHT))
@@ -701,93 +720,69 @@ class TimerDial(QWidget):
         p.setBrush(Qt.NoBrush)
         p.drawEllipse(QPointF(cx, cy), ring_r, ring_r)
 
-        # ── Layer 4: 눈금 (링 바깥 → 다이얼 가장자리 방향) ──
-        num_ticks = self.max_minutes   # 60 or 120
+        # ── Layer 4: 눈금 (링 바깥, tick_outer 이내) ──
+        num_ticks = self.max_minutes
         p.save(); p.translate(cx, cy)
         for i in range(num_ticks):
             ang = i * 360.0 / num_ticks
             p.save(); p.rotate(ang)
             major = (i % 5 == 0)
+            y_out = -tick_outer
+            y_in  = -(tick_outer - (tick_long if major else tick_short))
             p.setPen(QPen(
                 t.tick_major if major else t.tick_minor,
                 tick_lw if major else tick_sw,
                 Qt.SolidLine, Qt.RoundCap
             ))
-            # 눈금: 안쪽(ring 바로 밖) → 바깥쪽(dial edge)
-            p.drawLine(QPointF(0, -(tick_il if major else tick_is)),
-                       QPointF(0, -tick_outer))
+            p.drawLine(QPointF(0, y_in), QPointF(0, y_out))
             p.restore()
         p.restore()
 
-        # ── Layer 5: 숫자 라벨 (링 바깥, num_r=182 기준) ──
-        step = self.max_minutes // 12   # 5 or 10
+        # ── Layer 5: 숫자 라벨 ──
+        step = self.max_minutes // 12
         p.save()
         p.setFont(get_font(nfx, QFont.DemiBold))
         p.setPen(t.number_col)
+        fm = p.fontMetrics()
         for i in range(12):
             minute = i * step
             rad = math.radians(i * 30 - 90)
             lx = cx + num_r * math.cos(rad)
             ly = cy + num_r * math.sin(rad)
             text = str(minute)
-            fm = p.fontMetrics()
             tw = fm.horizontalAdvance(text)
             th = fm.height()
             p.drawText(int(lx - tw/2), int(ly + th/3), text)
         p.restore()
 
-        # ── Layer 6: 핸드 라인 (중심 → 파이 끝 각도) ──
+        # ── Layer 6: 핸드 라인 ──
         if self._disp > 0:
             frac = self._disp / (self.max_minutes * 60)
             hand_rad = math.radians(frac * 360 - 90)
             hx = cx + face_r * math.cos(hand_rad)
             hy = cy + face_r * math.sin(hand_rad)
-            p.setPen(QPen(Theme.RED_HAND, max(1.5, 2.0*scale),
+            p.setPen(QPen(Theme.RED_HAND, max(1.5, side * 0.006),
                           Qt.SolidLine, Qt.RoundCap))
             p.drawLine(QPointF(cx, cy), QPointF(hx, hy))
 
-        # ── Layer 7: 중앙 원 (fill=dial_face, stroke none) ──
+        # ── Layer 7: 중앙 원 (fill=dial_face, 테두리 없음) ──
         p.setPen(Qt.NoPen)
         p.setBrush(QBrush(t.dial_face))
         p.drawEllipse(QPointF(cx, cy), center_r, center_r)
 
-        # ── Layer 8: 시간 텍스트 + 상태 힌트 (중앙 원 안) ──
+        # ── Layer 8: 시간 텍스트만 표시 (상태 힌트 없음) ──
         p.save()
         shown = int(math.ceil(self._disp)) if self.is_running else self.remaining_seconds
         mins, secs = divmod(shown, 60)
         time_txt = f"{mins:02d}:00" if self.is_dragging else f"{mins:02d}:{secs:02d}"
-
-        # 시간 (34px Bold)
         p.setFont(get_font(cfx, QFont.Bold))
         p.setPen(t.time_col)
         fm = p.fontMetrics()
         tw = fm.horizontalAdvance(time_txt)
         th = fm.height()
-        # 상태 힌트가 있으므로 시간을 살짝 위로 올려 두 줄을 중앙 정렬
-        line_gap = max(2, int(4 * scale))
-        sfm_h = max(8, int(sfx * 1.2))   # 상태 텍스트 라인 높이 추정
-        total_h = th + line_gap + sfm_h
-        time_y = int(cy - total_h/2 + th * 0.82)
-        p.drawText(int(cx - tw/2), time_y, time_txt)
-
-        # 상태 힌트 (11px Regular)
-        if self.is_running:              st, sc = "실행 중",      t.theme_status(True)
-        elif self.is_dragging:           st, sc = "설정 중...",   t.status_col
-        elif self.remaining_seconds > 0: st, sc = "준비",         t.status_col
-        else:                            st, sc = "터치해서 설정", t.status_col
-
-        p.setFont(get_font(sfx))
-        p.setPen(sc)
-        fm2 = p.fontMetrics()
-        tw2 = fm2.horizontalAdvance(st)
-        status_y = time_y + line_gap + sfm_h
-        p.drawText(int(cx - tw2/2), status_y, st)
+        p.drawText(int(cx - tw/2), int(cy + th/3), time_txt)
         p.restore()
-
-        # ── Layer 9: 중앙 점 ──
-        p.setPen(Qt.NoPen)
-        p.setBrush(QBrush(t.hand_dot))
-        p.drawEllipse(QPointF(cx, cy), dot_r, dot_r)
+        # ── 중앙 점 없음 ──
 
 
 # Theme에 helper 추가 (monkey-patch 대신 메서드로)
@@ -817,7 +812,7 @@ class SettingsPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-    def build(self, sound_lib, theme, sound_enabled, sound_name, mode_120):
+    def build(self, sound_lib, theme, sound_enabled, sound_name, mode_120, opacity):
         """레이아웃 동적 구성 (테마 적용 후 호출)."""
         # 기존 레이아웃 제거
         old = self.layout()
@@ -895,6 +890,36 @@ class SettingsPage(QWidget):
         r3.addWidget(self.mode_toggle)
         root.addLayout(r3)
 
+        root.addSpacing(20)
+
+        # ─ 화면 그룹 ─
+        root.addWidget(group_label("화면"))
+        root.addSpacing(8)
+
+        # 투명도 슬라이더
+        r4 = QVBoxLayout(); r4.setSpacing(6)
+        opacity_pct = int(opacity * 100)
+        r4.addLayout(row_label("창 투명도", f"현재: {opacity_pct}%"))
+        from PyQt5.QtWidgets import QSlider
+        self.opacity_label = None  # desc label 참조용
+        # desc label 찾기
+        for i in range(r4.count()):
+            item = r4.itemAt(i)
+            if item and item.layout():
+                lay = item.layout()
+                for j in range(lay.count()):
+                    w = lay.itemAt(j).widget() if lay.itemAt(j) else None
+                    if w and w.objectName() == "settingDesc":
+                        self.opacity_label = w
+
+        self.opacity_slider = QSlider(Qt.Horizontal)
+        self.opacity_slider.setObjectName("opacitySlider")
+        self.opacity_slider.setRange(20, 100)   # 20%~100%
+        self.opacity_slider.setValue(opacity_pct)
+        self.opacity_slider.setFixedHeight(28)
+        r4.addWidget(self.opacity_slider)
+        root.addLayout(r4)
+
         root.addStretch()
 
 
@@ -923,8 +948,10 @@ class TimeTimerWindow(QWidget):
         self._apply_theme()
         self._apply_aot()
         self.resize(420, 620)
-        self.setMinimumSize(320, 500)
+        self.setMinimumSize(280, 380)
         self.setWindowTitle("Time Timer")
+        self._opacity = 1.0          # 투명도 (1.0=불투명, 0.2=최소)
+        self._update_btn_sizes()     # 초기 버튼 크기
 
         self._poll = QTimer(self); self._poll.setInterval(2000)
         self._poll.timeout.connect(self._check_theme); self._poll.start()
@@ -957,10 +984,14 @@ class TimeTimerWindow(QWidget):
         # 상단 바
         top = QHBoxLayout(); top.setSpacing(8)
 
-        self.pin_btn = SvgIconButton('pin', size=32, checkable=True, parent=self)
+        self.pin_btn = QPushButton("📌")
+        self.pin_btn.setObjectName("pinBtn")
+        self.pin_btn.setCheckable(True)
         self.pin_btn.setChecked(True)
+        self.pin_btn.setFixedSize(32, 32)
         self.pin_btn.setToolTip("항상 위 고정")
-        self.pin_btn.connect(self._toggle_aot)
+        self.pin_btn.setCursor(Qt.PointingHandCursor)
+        self.pin_btn.clicked.connect(self._toggle_aot)
 
         top.addWidget(self.pin_btn)
         top.addStretch()
@@ -992,21 +1023,26 @@ class TimeTimerWindow(QWidget):
         mp.addWidget(self.dial_box, 1)
         mp.addSpacing(16)
 
-        # 시작 / 리셋 버튼 (아이콘)
+        # 시작 / 리셋 버튼 (이모지, 동일 크기)
         btn_row = QHBoxLayout(); btn_row.setSpacing(14)
         btn_row.addStretch()
 
-        self.reset_icon = SvgIconButton('reset', size=52, parent=self)
-        self.reset_icon.connect(self.dial.reset)
+        self.reset_icon = QPushButton("🔄")
+        self.reset_icon.setObjectName("emojiBtn")
+        self.reset_icon.setCursor(Qt.PointingHandCursor)
+        self.reset_icon.clicked.connect(self.dial.reset)
 
-        self.start_icon = SvgIconButton('play', size=64, parent=self)
-        self.start_icon.connect(self._on_start_pause)
+        self.start_icon = QPushButton("▶️")
+        self.start_icon.setObjectName("emojiBtn")   # 동일 objectName → 동일 스타일
+        self.start_icon.setCursor(Qt.PointingHandCursor)
+        self.start_icon.clicked.connect(self._on_start_pause)
 
         btn_row.addWidget(self.reset_icon)
         btn_row.addSpacing(4)
         btn_row.addWidget(self.start_icon)
         btn_row.addStretch()
         mp.addLayout(btn_row)
+        mp.addSpacing(8)
 
         self.stack.addWidget(self.main_page)   # index 0
 
@@ -1038,7 +1074,57 @@ class TimeTimerWindow(QWidget):
         scroll.setWidget(self.settings_inner)
         sp_outer.addWidget(scroll, 1)
 
-        self.stack.addWidget(self.settings_page)   # index 1
+        # 리사이즈/드래그를 위해 surface와 stack 위젯에 eventFilter 설치
+        self.surface.installEventFilter(self)
+        self.stack.installEventFilter(self)
+        self.main_page.installEventFilter(self)
+
+    # ── 이벤트 필터 (리사이즈 & 드래그 이벤트 가로채기) ──────────────
+    def eventFilter(self, obj, event):
+        from PyQt5.QtCore import QEvent
+        if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+            gpos = event.globalPos()
+            lpos = self.mapFromGlobal(gpos)
+            edge = self._edge(lpos)
+            if edge:
+                self._resize_edge = edge
+                self._resize_start_geo = self.geometry()
+                self._resize_start_pos = gpos
+                return True          # 이벤트 소비 → 자식에 전달 안 함
+            if lpos.y() < 50:
+                self._drag_pos = gpos - self.frameGeometry().topLeft()
+                return True
+        elif event.type() == QEvent.MouseMove:
+            gpos = event.globalPos()
+            lpos = self.mapFromGlobal(gpos)
+            if event.buttons() == Qt.NoButton:
+                edge = self._edge(lpos)
+                self.setCursor(QCursor(self._CUR.get(edge, Qt.ArrowCursor)))
+                # 커서만 바꾸고 이벤트는 자식에 전달
+                return False
+            if self._resize_edge and self._resize_start_geo and self._resize_start_pos:
+                d = gpos - self._resize_start_pos
+                g = self._resize_start_geo
+                nx, ny, nw, nh = g.x(), g.y(), g.width(), g.height()
+                mw, mh = self.minimumWidth(), self.minimumHeight()
+                ed = self._resize_edge
+                if "r" in ed: nw = max(mw, g.width() + d.x())
+                if "b" in ed: nh = max(mh, g.height() + d.y())
+                if "l" in ed:
+                    nw = max(mw, g.width() - d.x())
+                    nx = g.x() + g.width() - nw
+                if "t" in ed:
+                    nh = max(mh, g.height() - d.y())
+                    ny = g.y() + g.height() - nh
+                self.setGeometry(nx, ny, nw, nh)
+                return True
+            if self._drag_pos is not None and event.buttons() & Qt.LeftButton:
+                self.move(gpos - self._drag_pos)
+                return True
+        elif event.type() == QEvent.MouseButtonRelease:
+            self._drag_pos = self._resize_edge = None
+            self._resize_start_geo = self._resize_start_pos = None
+        return super().eventFilter(obj, event)
 
     # ── 테마 ───────────────────────────────────────────────────────────
     def _check_theme(self):
@@ -1060,16 +1146,27 @@ class TimeTimerWindow(QWidget):
     def _open_settings(self):
         self.settings_inner.build(
             self.sound_lib, self.theme,
-            self.sound_enabled, self.selected_snd, self.mode_120
+            self.sound_enabled, self.selected_snd, self.mode_120,
+            self._opacity
         )
-        self.surface.setStyleSheet(self.theme.qss())   # 재적용
+        self.surface.setStyleSheet(self.theme.qss())
         # 시그널 연결
         self.settings_inner.preview_btn.clicked.connect(self._preview)
         self.settings_inner.sound_toggle.toggled = self._on_sound_toggle
         self.settings_inner.mode_toggle.toggled  = self._on_mode_toggle
         self.settings_inner.sound_combo.currentTextChanged.connect(
             lambda n: setattr(self, 'selected_snd', n))
+        self.settings_inner.opacity_slider.valueChanged.connect(self._on_opacity_changed)
         self.stack.setCurrentIndex(1)
+
+    def _on_opacity_changed(self, value):
+        """슬라이더 값(20~100) → 창 투명도 적용."""
+        self._opacity = value / 100.0
+        self.setWindowOpacity(self._opacity)
+        # 레이블 실시간 업데이트
+        lbl = getattr(self.settings_inner, 'opacity_label', None)
+        if lbl:
+            lbl.setText(f"현재: {value}%")
 
     def _close_settings(self):
         # 설정값 저장 (이미 signal에서 실시간 반영됨)
@@ -1095,14 +1192,11 @@ class TimeTimerWindow(QWidget):
 
     # ── 타이머 콜백 ────────────────────────────────────────────────────
     def on_state_changed(self):
-        # play ↔ pause 아이콘 전환
-        self.start_icon._icon = 'pause' if self.dial.is_running else 'play'
-        self.start_icon.update()
+        self.start_icon.setText("⏸️" if self.dial.is_running else "▶️")
 
     def on_finished(self):
         self._play(self.selected_snd)
-        self.start_icon._icon = 'play'
-        self.start_icon.update()
+        self.start_icon.setText("▶️")
 
     def _on_start_pause(self):
         if self.dial.is_running: self.dial.pause()
@@ -1120,10 +1214,30 @@ class TimeTimerWindow(QWidget):
         self.always_on_top = self.pin_btn.isChecked()
         self._apply_aot()
 
-    # ── 프레임리스 이동 + 리사이즈 ────────────────────────────────────
+    def resizeEvent(self, event):
+        """창 크기 변경 시 버튼 크기를 창 너비에 비례해서 동적 조정."""
+        super().resizeEvent(event)
+        self._update_btn_sizes()
+
+    def _update_btn_sizes(self):
+        """버튼 크기 = 창 너비의 10%, 최소 36px ~ 최대 72px."""
+        w = self.width()
+        btn_sz = max(36, min(72, int(w * 0.10)))
+        font_sz = max(16, min(32, int(btn_sz * 0.50)))
+        for btn in (self.reset_icon, self.start_icon):
+            btn.setFixedSize(btn_sz, btn_sz)
+            f = btn.font()
+            f.setPixelSize(font_sz)
+            btn.setFont(f)
+            # border-radius를 절반으로 유지 (원형)
+            btn.setStyleSheet(
+                f"border-radius:{btn_sz//2}px; font-size:{font_sz}px;"
+            )
+
+    # ── 프레임리스 이동 + 리사이즈 (eventFilter가 주 처리) ───────────
     def _edge(self, pos):
-        x,y,w,h,m = pos.x(),pos.y(),self.width(),self.height(),self.RM
-        l,r,t,b = x<=m, x>=w-m, y<=m, y>=h-m
+        x, y, w, h, m = pos.x(), pos.y(), self.width(), self.height(), self.RM
+        l, r, t, b = x <= m, x >= w - m, y <= m, y >= h - m
         if r and b: return "br"
         if r and t: return "tr"
         if l and b: return "bl"
@@ -1134,41 +1248,48 @@ class TimeTimerWindow(QWidget):
         if t: return "t"
         return None
 
-    _CUR = {"l":Qt.SizeHorCursor,"r":Qt.SizeHorCursor,
-            "t":Qt.SizeVerCursor,"b":Qt.SizeVerCursor,
-            "tl":Qt.SizeFDiagCursor,"br":Qt.SizeFDiagCursor,
-            "tr":Qt.SizeBDiagCursor,"bl":Qt.SizeBDiagCursor}
+    _CUR = {"l": Qt.SizeHorCursor,  "r": Qt.SizeHorCursor,
+            "t": Qt.SizeVerCursor,  "b": Qt.SizeVerCursor,
+            "tl": Qt.SizeFDiagCursor, "br": Qt.SizeFDiagCursor,
+            "tr": Qt.SizeBDiagCursor, "bl": Qt.SizeBDiagCursor}
 
     def mousePressEvent(self, e):
-        if e.button()!=Qt.LeftButton: return
+        # 창 자체 영역(자식 없는 여백)에서 동작하는 fallback
+        if e.button() != Qt.LeftButton: return
         edge = self._edge(e.pos())
         if edge:
-            self._resize_edge=edge; self._resize_start_geo=self.geometry()
-            self._resize_start_pos=e.globalPos(); return
-        if e.pos().y() < 50:
-            self._drag_pos = e.globalPos()-self.frameGeometry().topLeft()
+            self._resize_edge = edge
+            self._resize_start_geo = self.geometry()
+            self._resize_start_pos = e.globalPos()
+        elif e.pos().y() < 50:
+            self._drag_pos = e.globalPos() - self.frameGeometry().topLeft()
 
     def mouseMoveEvent(self, e):
-        if e.buttons()==Qt.NoButton:
-            edge=self._edge(e.pos())
-            self.setCursor(QCursor(self._CUR.get(edge,Qt.ArrowCursor))); return
+        if e.buttons() == Qt.NoButton:
+            edge = self._edge(e.pos())
+            self.setCursor(QCursor(self._CUR.get(edge, Qt.ArrowCursor)))
+            return
         if self._resize_edge and self._resize_start_geo and self._resize_start_pos:
-            d=e.globalPos()-self._resize_start_pos; g=self._resize_start_geo
-            nx,ny,nw,nh=g.x(),g.y(),g.width(),g.height()
-            mw,mh=self.minimumWidth(),self.minimumHeight()
-            ed=self._resize_edge
-            if "r" in ed: nw=max(mw,g.width()+d.x())
-            if "b" in ed: nh=max(mh,g.height()+d.y())
+            d = e.globalPos() - self._resize_start_pos
+            g = self._resize_start_geo
+            nx, ny, nw, nh = g.x(), g.y(), g.width(), g.height()
+            mw, mh = self.minimumWidth(), self.minimumHeight()
+            ed = self._resize_edge
+            if "r" in ed: nw = max(mw, g.width() + d.x())
+            if "b" in ed: nh = max(mh, g.height() + d.y())
             if "l" in ed:
-                nw=max(mw,g.width()-d.x()); nx=g.x()+g.width()-nw
+                nw = max(mw, g.width() - d.x())
+                nx = g.x() + g.width() - nw
             if "t" in ed:
-                nh=max(mh,g.height()-d.y()); ny=g.y()+g.height()-nh
-            self.setGeometry(nx,ny,nw,nh); return
-        if e.buttons()&Qt.LeftButton and self._drag_pos is not None:
-            self.move(e.globalPos()-self._drag_pos)
+                nh = max(mh, g.height() - d.y())
+                ny = g.y() + g.height() - nh
+            self.setGeometry(nx, ny, nw, nh)
+        elif self._drag_pos and e.buttons() & Qt.LeftButton:
+            self.move(e.globalPos() - self._drag_pos)
 
     def mouseReleaseEvent(self, e):
-        self._drag_pos=self._resize_edge=self._resize_start_geo=self._resize_start_pos=None
+        self._drag_pos = self._resize_edge = None
+        self._resize_start_geo = self._resize_start_pos = None
 
 
 # ══════════════════════════════════════════════════════════════════════
