@@ -927,7 +927,7 @@ class SettingsPage(QWidget):
 # 메인 윈도우
 # ══════════════════════════════════════════════════════════════════════
 class TimeTimerWindow(QWidget):
-    RM = 8   # resize margin
+    RM = 20   # resize margin
 
     def __init__(self):
         super().__init__()
@@ -1073,11 +1073,21 @@ class TimeTimerWindow(QWidget):
         self.settings_inner = SettingsPage()
         scroll.setWidget(self.settings_inner)
         sp_outer.addWidget(scroll, 1)
+        
+        # ✨ 이 부분을 추가해 주세요! (index 1로 설정 페이지 등록)
+        self.stack.addWidget(self.settings_page)
 
         # 리사이즈/드래그를 위해 surface와 stack 위젯에 eventFilter 설치
         self.surface.installEventFilter(self)
         self.stack.installEventFilter(self)
         self.main_page.installEventFilter(self)
+        
+        # 마우스 트래킹 활성화 (클릭 없이도 마우스 위치 추적)
+        self.setMouseTracking(True)
+        self.surface.setMouseTracking(True)
+        self.stack.setMouseTracking(True)
+        self.main_page.setMouseTracking(True)
+        self.settings_page.setMouseTracking(True)
 
     # ── 이벤트 필터 (리사이즈 & 드래그 이벤트 가로채기) ──────────────
     def eventFilter(self, obj, event):
@@ -1099,7 +1109,13 @@ class TimeTimerWindow(QWidget):
             lpos = self.mapFromGlobal(gpos)
             if event.buttons() == Qt.NoButton:
                 edge = self._edge(lpos)
-                self.setCursor(QCursor(self._CUR.get(edge, Qt.ArrowCursor)))
+                
+                # ✨ 수정된 부분: edge가 있으면 해당 커서로, 없으면 커서 강제 지정 해제
+                if edge:
+                    self.setCursor(QCursor(self._CUR[edge]))
+                else:
+                    self.unsetCursor()
+
                 # 커서만 바꾸고 이벤트는 자식에 전달
                 return False
             if self._resize_edge and self._resize_start_geo and self._resize_start_pos:
@@ -1267,8 +1283,13 @@ class TimeTimerWindow(QWidget):
     def mouseMoveEvent(self, e):
         if e.buttons() == Qt.NoButton:
             edge = self._edge(e.pos())
-            self.setCursor(QCursor(self._CUR.get(edge, Qt.ArrowCursor)))
+            # ✨ 수정된 부분: 위와 동일하게 unsetCursor 적용
+            if edge:
+                self.setCursor(QCursor(self._CUR[edge]))
+            else:
+                self.unsetCursor()
             return
+        
         if self._resize_edge and self._resize_start_geo and self._resize_start_pos:
             d = e.globalPos() - self._resize_start_pos
             g = self._resize_start_geo
