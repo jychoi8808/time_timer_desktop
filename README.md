@@ -41,17 +41,17 @@
 ### 설치 및 실행
 1. 저장소를 클론합니다.
 ```bash
-   git clone [https://github.com/jychoi8808/time_timer_desktop.git](https://github.com/jychoi8808/time_timer_desktop.git)
-   cd time_timer_desktop
+git clone [https://github.com/jychoi8808/time_timer_desktop.git](https://github.com/jychoi8808/time_timer_desktop.git)
+cd time_timer_desktop
 ```
 
 
-필요한 패키지를 설치합니다.
+2. 필요한 패키지를 설치합니다.
 ```bash
 pip install PyQt5
 ```
 
-앱을 실행합니다.
+3. 앱을 실행합니다.
 ```bash
 python time_timer_desktop.py
 ```
@@ -64,10 +64,12 @@ Language: Python
 GUI Framework: PyQt5 (Qt Widgets, QPainter, QtMultimedia)
 Font: Pretendard (Variable)
 Sound Generation: Wave, Struct (Procedural Audio Synthesis)
+
 ---
 ## 📄 라이선스 (License)
 
 이 프로젝트는 MIT 라이선스에 따라 자유롭게 이용 가능합니다.
+
 ---
 ## 👨‍💻 기여자 (Author)
 
