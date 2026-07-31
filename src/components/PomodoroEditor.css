@@ -1,0 +1,98 @@
+.seg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.seg-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-surface) 92%, var(--border));
+}
+
+.seg-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.seg-label {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.seg-min {
+  width: 46px;
+  padding: 5px 4px 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  text-align: right;
+}
+.seg-unit {
+  font-size: 11px;
+  color: var(--subtext);
+}
+
+.seg-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.seg-actions button {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--subtext);
+  font-size: 11px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.seg-actions button:hover:not(:disabled) {
+  background: var(--border);
+  color: var(--text);
+}
+.seg-actions button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.add-seg-btn {
+  margin-top: 12px;
+  width: 100%;
+  padding: 9px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--subtext);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.add-seg-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}

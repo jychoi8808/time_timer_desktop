@@ -1,8 +1,10 @@
 """
-Time Timer (Desktop) — v5
+Time Timer (Desktop) — v5.1
 - 미니모드 제어 개선 (클릭 정지/재생, 리사이즈 여백 조절, 일시정지 색상)
 - 항상 위(핀) 버튼 미니모드 유지
 - 무음 모드 (종료 시 화면 깜빡임)
+- 창 200x250 이하 시 미니멀 모드 전환
+- 클릭 이벤트 충돌 해결 및 마우스 튕김 보정
 """
 
 import sys, math, struct, wave, os, tempfile
@@ -15,7 +17,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, QRectF, QPointF, QSize, QUrl, QEvent
 from PyQt5.QtGui import (
     QPainter, QColor, QPen, QBrush, QFont, QFontDatabase,
-    QCursor, QPalette, QPainterPath
+    QCursor, QPalette
 )
 from PyQt5.QtMultimedia import QSoundEffect
 
@@ -132,10 +134,7 @@ class Theme:
         combo_selc  = "#f87171" if d else ACCENT
 
         return f"""
-        QFrame#surface {{
-            background:{surface}; border:1px solid {border};
-            border-radius:20px;
-        }}
+        QFrame#surface {{ background:{surface}; border:1px solid {border}; border-radius:20px; }}
         QLabel {{ background:transparent; }}
         QLabel#title {{ color:{title}; font-size:13px; font-weight:600; }}
         QLabel#subtitle {{ color:{sub}; font-size:11px; }}
@@ -338,37 +337,73 @@ class TimerDial(QWidget):
         return (a + 90) % 360
 
     def _secs(self, angle): return int(round(angle/360 * self.max_minutes * 60))
+    
     def _in_dial(self, pos):
         cx, cy = self.width()/2, self.height()/2
         r_sq = (pos.x()-cx)**2 + (pos.y()-cy)**2
         side = min(self.width(), self.height())
         
         if self.is_minimal:
-            # ✨ 미니모드: 외부 반지름과 내부 반지름 사이(도넛 링)만 인식
             outer_r = side * 0.5
             inner_r = side * 0.28
             return (inner_r**2 <= r_sq <= outer_r**2)
         else:
-            # 일반모드: 다이얼 전체 인식
             r = side / 2 * 0.839
             return r_sq <= r**2
 
     def mousePressEvent(self, e):
-        # ✨ 기존의 if self.is_minimal: e.ignore() 부분을 삭제했습니다.
-        # 이제 미니모드에서도 _in_dial(링 영역) 조건을 만족하면 시간 조절이 가능합니다.
-        if e.button()==Qt.LeftButton and not self.is_running and self._in_dial(e.pos()):
-            self.is_dragging = True
-            self._apply(e.pos())
+        if self.is_minimal:
+            if e.button() == Qt.LeftButton and self._in_dial(e.pos()):
+                self._press_pos = e.pos()
+                self.is_dragging = False
+            else:
+                e.ignore() 
         else:
-            e.ignore() # 도넛 중앙이나 바깥을 누르면 창 끄집기/일시정지로 양보
+            if e.button() == Qt.LeftButton and not self.is_running and self._in_dial(e.pos()):
+                self.is_dragging = True
+                self._apply(e.pos())
+            else:
+                e.ignore()
 
     def mouseMoveEvent(self, e):
-        if self.is_dragging and not self.is_running: self._apply(e.pos())
-        elif not self.is_running and self._in_dial(e.pos()): self.hover_angle = self._angle(e.pos()); self.update()
-        elif self.hover_angle is not None: self.hover_angle = None; self.update()
+        if self.is_minimal:
+            if getattr(self, '_press_pos', None) and e.buttons() & Qt.LeftButton:
+                if not self.is_dragging:
+                    dist = (e.pos() - self._press_pos).manhattanLength()
+                    if dist > 15:
+                        self.is_dragging = True
+                        if not self.is_running:
+                            self._apply(e.pos())
+                else:
+                    if not self.is_running:
+                        self._apply(e.pos())
+            elif not self.is_running and self._in_dial(e.pos()):
+                self.hover_angle = self._angle(e.pos())
+                self.update()
+            elif self.hover_angle is not None:
+                self.hover_angle = None
+                self.update()
+        else:
+            if self.is_dragging and not self.is_running:
+                self._apply(e.pos())
+            elif not self.is_running and self._in_dial(e.pos()):
+                self.hover_angle = self._angle(e.pos())
+                self.update()
+            elif self.hover_angle is not None:
+                self.hover_angle = None
+                self.update()
 
     def mouseReleaseEvent(self, e):
-        if e.button()==Qt.LeftButton: self.is_dragging = False
+        if self.is_minimal:
+            if e.button() == Qt.LeftButton:
+                if getattr(self, '_press_pos', None) and not self.is_dragging:
+                    if self._pw:
+                        self._pw._on_start_pause()
+                self.is_dragging = False
+                self._press_pos = None
+        else:
+            if e.button() == Qt.LeftButton:
+                self.is_dragging = False
 
     def leaveEvent(self, _):
         self.hover_angle = None; self.update()
@@ -428,7 +463,6 @@ class TimerDial(QWidget):
             frac = self._disp / (self.max_minutes * 60)
             span = frac * 360.0
             p.setPen(Qt.NoPen)
-            # ✨ 미니모드이면서 정지상태일 때 회색으로 표시
             if self.is_minimal and not self.is_running:
                 p.setBrush(QBrush(t.status_col))
             else:
@@ -476,7 +510,7 @@ class TimerDial(QWidget):
         p.setPen(Qt.NoPen); p.setBrush(QBrush(t.dial_face))
         p.drawEllipse(QPointF(cx, cy), center_r, center_r)
 
-        # 8: 시간 텍스트 (미니모드에서도 렌더링, 크기 조절)
+        # 8: 시간 텍스트 
         p.save()
         shown = int(math.ceil(self._disp)) if self.is_running else self.remaining_seconds
         mins, secs = divmod(shown, 60)
@@ -535,7 +569,6 @@ class SettingsPage(QWidget):
         root.addLayout(r1)
         root.addSpacing(12)
 
-        # ✨ 무음 모드 (화면 깜빡임) 추가
         r_silent = QHBoxLayout(); r_silent.setSpacing(10)
         r_silent.addLayout(row_label("무음 모드", "종료 시 소리 대신 화면 깜빡임"))
         r_silent.addStretch()
@@ -608,7 +641,7 @@ class TimeTimerWindow(QWidget):
         self.sound_lib     = SoundLibrary()
         self.sound_fx      = QSoundEffect()
         self.sound_enabled = True
-        self.silent_mode   = False  # ✨ 무음 모드
+        self.silent_mode   = False
         self.selected_snd  = "부드러운 차임"
         self.mode_120      = False
 
@@ -702,14 +735,13 @@ class TimeTimerWindow(QWidget):
         mp.addWidget(self.bottom_widget)
         self.stack.addWidget(self.main_page)
 
-        # ✨ 미니모드용 핀(항상 위) 오버레이 버튼
         self.mini_pin_btn = QPushButton("📌", self.surface)
         self.mini_pin_btn.setObjectName("pinBtn")
         self.mini_pin_btn.setCheckable(True)
         self.mini_pin_btn.setChecked(True)
         self.mini_pin_btn.setFixedSize(26, 26)
         self.mini_pin_btn.setCursor(Qt.PointingHandCursor)
-        self.mini_pin_btn.move(14, 14) # 좌측 상단 마진
+        self.mini_pin_btn.move(14, 14)
         self.mini_pin_btn.hide()
         self.mini_pin_btn.clicked.connect(self._toggle_aot)
 
@@ -749,7 +781,7 @@ class TimeTimerWindow(QWidget):
                 return True
             if lpos.y() < 50 or getattr(self, '_is_minimal_ui', False):
                 self._drag_pos = gpos - self.frameGeometry().topLeft()
-                self._mouse_press_pos = gpos # ✨ 클릭 구분을 위해 위치 저장
+                self._mouse_press_pos = gpos
                 return True
                 
         elif event.type() == QEvent.MouseMove:
@@ -760,7 +792,7 @@ class TimeTimerWindow(QWidget):
                 if edge: self.setCursor(QCursor(self._CUR.get(edge, Qt.ArrowCursor)))
                 else: self.unsetCursor()
                 return False
-            if self._resize_edge and self._resize_start_geo and self._resize_start_pos:
+            if getattr(self, '_resize_edge', None) and getattr(self, '_resize_start_geo', None) and getattr(self, '_resize_start_pos', None):
                 d = gpos - self._resize_start_pos
                 g = self._resize_start_geo
                 nx, ny, nw, nh = g.x(), g.y(), g.width(), g.height()
@@ -772,15 +804,14 @@ class TimeTimerWindow(QWidget):
                 if "t" in ed: nh = max(mh, g.height() - d.y()); ny = g.y() + g.height() - nh
                 self.setGeometry(nx, ny, nw, nh)
                 return True
-            if self._drag_pos is not None and event.buttons() & Qt.LeftButton:
+            if getattr(self, '_drag_pos', None) is not None and event.buttons() & Qt.LeftButton:
                 self.move(gpos - self._drag_pos)
                 return True
                 
         elif event.type() == QEvent.MouseButtonRelease:
-            # ✨ 미니모드에서 움직임이 거의 없었으면 클릭(일시정지/재생)으로 간주
             if getattr(self, '_is_minimal_ui', False) and getattr(self, '_mouse_press_pos', None):
                 dist = (event.globalPos() - self._mouse_press_pos).manhattanLength()
-                if dist < 5: 
+                if dist < 15: 
                     self._on_start_pause()
 
             self._drag_pos = self._resize_edge = None
@@ -837,7 +868,7 @@ class TimeTimerWindow(QWidget):
 
     def _preview(self):
         name = self.settings_inner.sound_combo.currentText()
-        if self.silent_mode: self._flash_window() # 무음 모드 미리보기
+        if self.silent_mode: self._flash_window()
         else: self._play(name)
 
     def on_state_changed(self):
@@ -845,12 +876,11 @@ class TimeTimerWindow(QWidget):
 
     def on_finished(self):
         if self.silent_mode:
-            self._flash_window() # ✨ 소리 대신 깜빡임
+            self._flash_window()
         else:
             self._play(self.selected_snd)
         self.start_icon.setText("▶️")
 
-    # ✨ 화면 깜빡임 로직
     def _flash_window(self):
         self._flash_count = 0
         if not hasattr(self, '_flash_tmr'):
@@ -860,13 +890,12 @@ class TimeTimerWindow(QWidget):
 
     def _do_flash(self):
         self._flash_count += 1
-        if self._flash_count > 6: # 3번 깜빡임 (on/off 6번)
+        if self._flash_count > 6:
             self._flash_tmr.stop()
-            self.surface.setStyleSheet(self.theme.qss()) # 원상복구
+            self.surface.setStyleSheet(self.theme.qss())
             return
 
         if self._flash_count % 2 == 1:
-            # 배경을 빨간색으로 덮어씀
             qss = self.theme.qss() + f"\nQFrame#surface {{ background: {ACCENT}; }}"
             self.surface.setStyleSheet(qss)
         else:
@@ -887,7 +916,6 @@ class TimeTimerWindow(QWidget):
         sender = self.sender()
         if sender:
             self.always_on_top = sender.isChecked()
-            # 두 버튼(메인, 미니) 상태 동기화
             self.pin_btn.setChecked(self.always_on_top)
             self.mini_pin_btn.setChecked(self.always_on_top)
         self._apply_aot()
@@ -902,14 +930,14 @@ class TimeTimerWindow(QWidget):
             self.top_widget.hide(); self.bottom_widget.hide()
             self.dial.set_minimal(True)
             self.main_page.layout().setContentsMargins(4, 4, 4, 4)
-            self.mini_pin_btn.show() # ✨ 미니 핀 버튼 표시
+            self.mini_pin_btn.show()
             
         elif not should_be_minimal and self._is_minimal_ui:
             self._is_minimal_ui = False
             self.top_widget.show(); self.bottom_widget.show()
             self.dial.set_minimal(False)
             self.main_page.layout().setContentsMargins(18, 14, 18, 16)
-            self.mini_pin_btn.hide() # ✨ 미니 핀 버튼 숨김
+            self.mini_pin_btn.hide()
 
         self._update_btn_sizes()
 
@@ -923,23 +951,17 @@ class TimeTimerWindow(QWidget):
             btn.setStyleSheet(f"border-radius:{btn_sz//2}px; font-size:{font_sz}px;")
 
     def _edge(self, pos):
-        # 테두리 두께 (리사이즈를 잡을 얇은 선)
         m = 6 if getattr(self, '_is_minimal_ui', False) else 18 
-        # 모서리 판정 길이 (대각선 화살표가 뜨는 구간을 길게 확장)
         c_len = 24 if getattr(self, '_is_minimal_ui', False) else 44 
 
         x, y, w, h = pos.x(), pos.y(), self.width(), self.height()
-        
-        # 일단 상하좌우 가장자리에 닿았는지 판정
         l, r, t, b = x <= m, x >= w - m, y <= m, y >= h - m
         
-        # 대각선 판정: 가장자리에 닿아 있으면서, 코너 쪽(c_len)에 충분히 가까운가?
         if (l and y <= c_len) or (t and x <= c_len): return "tl"
         if (r and y <= c_len) or (t and x >= w - c_len): return "tr"
         if (l and y >= h - c_len) or (b and x <= c_len): return "bl"
         if (r and y >= h - c_len) or (b and x >= w - c_len): return "br"
 
-        # 대각선이 아니라면 일반 상하좌우 판정
         if r: return "r"
         if l: return "l"
         if b: return "b"
@@ -954,7 +976,7 @@ class TimeTimerWindow(QWidget):
         edge = self._edge(e.pos())
         if edge:
             self._resize_edge = edge; self._resize_start_geo = self.geometry(); self._resize_start_pos = e.globalPos()
-        elif self._is_minimal_ui or e.pos().y() < 50:
+        elif getattr(self, '_is_minimal_ui', False) or e.pos().y() < 50:
             self._drag_pos = e.globalPos() - self.frameGeometry().topLeft()
             self._mouse_press_pos = e.globalPos()
 
@@ -964,7 +986,7 @@ class TimeTimerWindow(QWidget):
             if edge: self.setCursor(QCursor(self._CUR.get(edge, Qt.ArrowCursor)))
             else: self.unsetCursor()
             return
-        if self._resize_edge and self._resize_start_geo and self._resize_start_pos:
+        if getattr(self, '_resize_edge', None) and getattr(self, '_resize_start_geo', None) and getattr(self, '_resize_start_pos', None):
             d = e.globalPos() - self._resize_start_pos
             g = self._resize_start_geo
             nx, ny, nw, nh = g.x(), g.y(), g.width(), g.height()
@@ -975,12 +997,11 @@ class TimeTimerWindow(QWidget):
             if "l" in ed: nw = max(mw, g.width() - d.x()); nx = g.x() + g.width() - nw
             if "t" in ed: nh = max(mh, g.height() - d.y()); ny = g.y() + g.height() - nh
             self.setGeometry(nx, ny, nw, nh)
-        elif self._drag_pos and e.buttons() & Qt.LeftButton:
+        elif getattr(self, '_drag_pos', None) and e.buttons() & Qt.LeftButton:
             self.move(e.globalPos() - self._drag_pos)
 
     def mouseReleaseEvent(self, e):
         if getattr(self, '_is_minimal_ui', False) and getattr(self, '_mouse_press_pos', None):
-            # 클릭 시 손떨림/미끄러짐 허용 오차를 5에서 15로 대폭 증가
             dist = (e.globalPos() - self._mouse_press_pos).manhattanLength()
             if dist < 15: 
                 self._on_start_pause()
@@ -990,12 +1011,14 @@ class TimeTimerWindow(QWidget):
 
 
 def main():
+    # ✨ 고해상도 지원 설정 (QApplication 생성 전에 위치해야 함)
+    try:
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps,    True)
+    except Exception: pass
+    
     app = QApplication(sys.argv)
     app.setApplicationName("Time Timer")
-    try:
-        app.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-        app.setAttribute(Qt.AA_UseHighDpiPixmaps,    True)
-    except Exception: pass
     w = TimeTimerWindow(); w.show()
     sys.exit(app.exec_())
 
