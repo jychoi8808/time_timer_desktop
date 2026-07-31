@@ -1,0 +1,67 @@
+/* 창 가장자리/모서리 리사이즈 핸들 (투명, 최상위) */
+.resize-handle {
+  position: fixed;
+  z-index: 100;
+}
+
+:root {
+  --rh-edge: 6px;
+  --rh-corner: 14px;
+}
+
+.rh-n {
+  top: 0;
+  left: var(--rh-corner);
+  right: var(--rh-corner);
+  height: var(--rh-edge);
+  cursor: ns-resize;
+}
+.rh-s {
+  bottom: 0;
+  left: var(--rh-corner);
+  right: var(--rh-corner);
+  height: var(--rh-edge);
+  cursor: ns-resize;
+}
+.rh-w {
+  left: 0;
+  top: var(--rh-corner);
+  bottom: var(--rh-corner);
+  width: var(--rh-edge);
+  cursor: ew-resize;
+}
+.rh-e {
+  right: 0;
+  top: var(--rh-corner);
+  bottom: var(--rh-corner);
+  width: var(--rh-edge);
+  cursor: ew-resize;
+}
+.rh-nw {
+  top: 0;
+  left: 0;
+  width: var(--rh-corner);
+  height: var(--rh-corner);
+  cursor: nwse-resize;
+}
+.rh-ne {
+  top: 0;
+  right: 0;
+  width: var(--rh-corner);
+  height: var(--rh-corner);
+  cursor: nesw-resize;
+}
+.rh-sw {
+  bottom: 0;
+  left: 0;
+  width: var(--rh-corner);
+  height: var(--rh-corner);
+  cursor: nesw-resize;
+}
+.rh-se {
+  bottom: 0;
+  right: 0;
+  width: var(--rh-corner);
+  height: var(--rh-corner);
+  cursor: nwse-resize;
+}

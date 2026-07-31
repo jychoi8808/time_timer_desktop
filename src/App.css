@@ -1,0 +1,257 @@
+/* ── 리셋 & 테마 변수 ─────────────────────────────── */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --accent: #f05650;
+  --accent-hover: #f37370;
+  --accent-press: #c94440;
+
+  /* Light theme (default) */
+  --bg-surface: #fcfcfe;
+  --border: #dadae0;
+  --text: #202123;
+  --subtext: #888892;
+  --shadow: rgba(0, 0, 0, 0.18);
+
+  /* Dial */
+  --dial-face: #ffffff;
+  --dial-ring: #d7d7de;
+  --tick-major: #a0a0aa;
+  --tick-minor: #c8c8d0;
+  --number-col: #8c8c96;
+  --time-col: #202123;
+  --red: #f05650;
+  --red-light: rgba(240, 86, 80, 0.18);
+  --status-col: #aaaab2;
+
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic",
+    "Noto Sans KR", -apple-system, system-ui, Arial, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-surface: #242428;
+    --border: #363640;
+    --text: #d0d0d8;
+    --subtext: #88888e;
+    --shadow: rgba(0, 0, 0, 0.45);
+
+    --dial-face: #2c2c30;
+    --dial-ring: #414148;
+    --tick-major: #a0a0a8;
+    --tick-minor: #50505a;
+    --number-col: #a0a0a8;
+    --time-col: #d0d0d8;
+    --red: #f05650;
+    --red-light: rgba(240, 86, 80, 0.22);
+    --status-col: #6e6e78;
+  }
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  background: transparent; /* 프레임리스 투명 창을 위해 필수 */
+}
+
+body {
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+}
+
+/* ── 창 surface (둥근 카드) ───────────────────────── */
+.surface {
+  position: absolute;
+  inset: 8px; /* 그림자용 여백 → 창 모서리는 투명 */
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: 0 6px 24px var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: opacity 0.25s ease; /* 가림방지 반투명 전환 */
+}
+
+.titlebar {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px;
+}
+
+.drag-spacer {
+  flex: 1;
+  height: 100%;
+}
+
+.icon-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--subtext);
+  font-size: 15px;
+  line-height: 1;
+  border-radius: 7px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+}
+.icon-btn:hover {
+  background: color-mix(in srgb, var(--bg-surface) 82%, var(--border));
+  color: var(--text);
+}
+.icon-btn.pin {
+  font-size: 16px;
+  opacity: 0.35;
+}
+.icon-btn.pin.active {
+  opacity: 1;
+}
+
+/* 무음 모드 깜빡임 */
+.surface.flash {
+  background: var(--accent);
+}
+
+/* 토스트 (단축키 피드백) */
+.toast {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 82%, transparent);
+  color: var(--bg-surface);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: toast-in 0.15s ease;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 18px;
+  min-height: 0; /* flex 자식 SVG 축소 허용 */
+  color: var(--text);
+}
+
+/* ── 미니모드 ─────────────────────────────── */
+.surface.minimal {
+  inset: 3px;
+  border-radius: 14px;
+}
+.surface.minimal .content {
+  padding: 2px;
+}
+
+/* ── 프리셋 ─────────────────────────────── */
+.presets {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  padding: 6px 18px 0;
+}
+
+.preset-btn {
+  min-width: 34px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.preset-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.preset-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ── 뽀모도로 상태 표시 ───────────────────── */
+.pomo-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px 18px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.pomo-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── 컨트롤 (시작/리셋) ───────────────────── */
+.controls {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 18px 18px;
+}
+
+.ctrl-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s, background 0.15s;
+}
+.ctrl-btn:hover {
+  background: color-mix(in srgb, var(--bg-surface) 85%, var(--border));
+}
+.ctrl-btn:active {
+  transform: scale(0.94);
+}
+.ctrl-primary {
+  border-color: var(--accent);
+}
